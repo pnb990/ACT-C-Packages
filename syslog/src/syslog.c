@@ -21,21 +21,30 @@ extern const syslog_module_t SYSLOG_CONFIG_MODULE_START[];
 extern const syslog_module_t SYSLOG_CONFIG_MODULE_STOP[];
 
 /* What syslog_init() was handed; null until then, and nothing is emitted. */
-static syslog_time_ms_t syslog_time_ms       = NULL;
-static syslog_sink_write_t syslog_sink_write = NULL;
+static syslog_time_ms_t syslog_time_ms = NULL;
+#if SYSLOG_CONFIG_LINE_BUFFER
+static syslog_line_write_t syslog_output = NULL;
+
+/* The body of the line being made, shared by every writer under the lock: a
+ * buffer on the stack would cost its size to every task that logs. */
+static char syslog_line_buffer[SYSLOG_CONFIG_LINE_BUFFER];
+#else
+static syslog_sink_write_t syslog_output = NULL;
+#endif
 
 #if SYSLOG_CONFIG_LOCK
 static syslog_lock_handle_t syslog_lock_handle = NULL;
 #endif
 
-#if SYSLOG_CONFIG_SHOW_LEVEL
+#if !SYSLOG_CONFIG_LINE_BUFFER
+#    if SYSLOG_CONFIG_SHOW_LEVEL
 /* The tag each level wears in the prefix, indexed by the level value 0..7. */
 static const char *const syslog_level_tag[] = { "EMERG", "ALERT",   "CRIT",
                                                 "ERR",   "WARNING", "NOTICE",
                                                 "INFO",  "DEBUG" };
-#endif
+#    endif
 
-#if SYSLOG_CONFIG_COLOR
+#    if SYSLOG_CONFIG_COLOR
 /*
  * The colour each level wears, indexed the same way. An ANSI select-graphic
  * sequence written before the prefix; SYSLOG_CONFIG_COLOR_RESET after the body
@@ -43,15 +52,15 @@ static const char *const syslog_level_tag[] = { "EMERG", "ALERT",   "CRIT",
  * 0..7. The three most severe levels take a red background so they cannot be
  * missed.
  */
-#    define ANSI_ESC     "\033["
-#    define ANSI_TEXT(c) ANSI_ESC "3" c "m"
-#    define ANSI_BACK(c) ANSI_ESC "4" c "m"
-#    define ANSI_BLACK   "0"
-#    define ANSI_RED     "1"
-#    define ANSI_GREEN   "2"
-#    define ANSI_YELLOW  "3"
-#    define ANSI_CYAN    "6"
-#    define ANSI_WHITE   "7"
+#        define ANSI_ESC     "\033["
+#        define ANSI_TEXT(c) ANSI_ESC "3" c "m"
+#        define ANSI_BACK(c) ANSI_ESC "4" c "m"
+#        define ANSI_BLACK   "0"
+#        define ANSI_RED     "1"
+#        define ANSI_GREEN   "2"
+#        define ANSI_YELLOW  "3"
+#        define ANSI_CYAN    "6"
+#        define ANSI_WHITE   "7"
 
 static const char *const syslog_level_color[] = {
     ANSI_BACK(ANSI_RED) ANSI_TEXT(ANSI_WHITE),  /* EMERG   */
@@ -63,62 +72,94 @@ static const char *const syslog_level_color[] = {
     ANSI_TEXT(ANSI_CYAN),                       /* INFO    */
     ANSI_TEXT(ANSI_WHITE),                      /* DEBUG   */
 };
-#endif
+#    endif
+#endif /* !SYSLOG_CONFIG_LINE_BUFFER */
+
+#if SYSLOG_CONFIG_LINE_BUFFER
+/*
+ * The line output: the body formatted into the shared buffer, truncated to
+ * it, and handed over whole with its level and module apart. The level is
+ * masked as in the stream output below.
+ */
+static void syslog_emit_line(const char *name,
+                             syslog_level_t level,
+                             const char *format,
+                             va_list args)
+{
+    syslog_line_t line;
+    const int length = format_vsnprintf(syslog_line_buffer,
+                                        sizeof(syslog_line_buffer),
+                                        format,
+                                        args);
+
+    line.time_ms = syslog_time_ms();
+    line.level   = (syslog_level_t)((unsigned int)level & 0x07u);
+    line.module  = name;
+    line.text    = syslog_line_buffer;
+    line.length  = ((size_t)length < sizeof(syslog_line_buffer))
+                       ? (size_t)length
+                       : (sizeof(syslog_line_buffer) - 1u);
+    syslog_output(&line);
+}
+#else
+/*
+ * The stream output: the prefix and the body stream straight to the sink with
+ * no line buffer, so nothing bounds a line. The level indexes the tag and
+ * colour tables masked to its low three bits, so a POSIX priority carrying a
+ * facility in its high bits still lands on a tag rather than off the end.
+ */
+static void syslog_emit_stream(const char *name,
+                               syslog_level_t level,
+                               const char *format,
+                               va_list args)
+{
+#    if SYSLOG_CONFIG_COLOR || SYSLOG_CONFIG_SHOW_LEVEL
+    const unsigned int level_index = (unsigned int)level & 0x07u;
+#    else
+    (void)level;
+#    endif
+
+#    if SYSLOG_CONFIG_COLOR
+    format_emit(syslog_output, NULL, "%s", syslog_level_color[level_index]);
+#    endif
+#    if SYSLOG_CONFIG_SHOW_TIME
+    format_emit(syslog_output, NULL, "[%" PRIu32 "] ", syslog_time_ms());
+#    endif
+#    if SYSLOG_CONFIG_SHOW_LEVEL
+    format_emit(syslog_output, NULL, "%s ", syslog_level_tag[level_index]);
+#    endif
+    format_emit(syslog_output, NULL, "%s: ", name);
+    format_vemit(syslog_output, NULL, format, args);
+#    if SYSLOG_CONFIG_COLOR
+    format_emit(syslog_output, NULL, "%s", SYSLOG_CONFIG_COLOR_RESET);
+#    endif
+    syslog_output(SYSLOG_CONFIG_EOL, sizeof(SYSLOG_CONFIG_EOL) - 1u, NULL);
+}
+#endif /* SYSLOG_CONFIG_LINE_BUFFER */
 
 /*
  * The one path every entry point funnels into. It takes only what the line
  * needs - a name and a level - not a module descriptor: the filtering is done
  * by the caller (the macro tests the module's mask; the POSIX path is governed
- * by setlogmask), so nothing here has a module to consult. The prefix and the
- * body stream straight to the sink with no line buffer, so nothing bounds a
- * line. The level indexes the tag and colour tables masked to its low three
- * bits, so a POSIX priority carrying a facility in its high bits still lands on
- * a tag rather than off the end. With SYSLOG_CONFIG_LOCK the program's lock
- * brackets the whole line, so a second writer does not interleave characters
- * into it.
+ * by setlogmask), so nothing here has a module to consult. With
+ * SYSLOG_CONFIG_LOCK the program's lock brackets the whole line, so a second
+ * writer does not interleave characters into it, nor into the line buffer.
  */
 static void syslog_emit_v(const char *name,
                           syslog_level_t level,
                           const char *format,
                           va_list args)
 {
-#if SYSLOG_CONFIG_COLOR || SYSLOG_CONFIG_SHOW_LEVEL
-    const unsigned int level_index = (unsigned int)level & 0x07u;
-#else
-    (void)level;
-#endif
-
-    if ((syslog_time_ms != NULL) && (syslog_sink_write != NULL))
+    if ((syslog_time_ms != NULL) && (syslog_output != NULL))
     {
 #if SYSLOG_CONFIG_LOCK
         syslog_lock(syslog_lock_handle);
 #endif
-#if SYSLOG_CONFIG_COLOR
-        format_emit(syslog_sink_write,
-                    NULL,
-                    "%s",
-                    syslog_level_color[level_index]);
+#if SYSLOG_CONFIG_LINE_BUFFER
+        syslog_emit_line(name, level, format, args);
+#else
+        syslog_emit_stream(name, level, format, args);
 #endif
-#if SYSLOG_CONFIG_SHOW_TIME
-        format_emit(syslog_sink_write,
-                    NULL,
-                    "[%" PRIu32 "] ",
-                    syslog_time_ms());
-#endif
-#if SYSLOG_CONFIG_SHOW_LEVEL
-        format_emit(syslog_sink_write,
-                    NULL,
-                    "%s ",
-                    syslog_level_tag[level_index]);
-#endif
-        format_emit(syslog_sink_write, NULL, "%s: ", name);
-        format_vemit(syslog_sink_write, NULL, format, args);
-#if SYSLOG_CONFIG_COLOR
-        format_emit(syslog_sink_write, NULL, "%s", SYSLOG_CONFIG_COLOR_RESET);
-#endif
-        syslog_sink_write(SYSLOG_CONFIG_EOL,
-                          sizeof(SYSLOG_CONFIG_EOL) - 1u,
-                          NULL);
 #if SYSLOG_CONFIG_LOCK
         syslog_unlock(syslog_lock_handle);
 #endif
@@ -194,7 +235,11 @@ void syslog_drain(int timeout_s)
     (void)timeout_s;
 }
 
-void syslog_init(syslog_time_ms_t time_ms, syslog_sink_write_t sink_write)
+#if SYSLOG_CONFIG_LINE_BUFFER
+void syslog_init(syslog_time_ms_t time_ms, syslog_line_write_t output)
+#else
+void syslog_init(syslog_time_ms_t time_ms, syslog_sink_write_t output)
+#endif
 {
     const syslog_module_t *module = SYSLOG_CONFIG_MODULE_START;
     int status                    = 0;
@@ -207,12 +252,12 @@ void syslog_init(syslog_time_ms_t time_ms, syslog_sink_write_t sink_write)
     }
 #endif
 
-    /* Without the lock the sink stays null, so every line is dropped rather
+    /* Without the lock the output stays null, so every line is dropped rather
      * than written unserialised. */
     if (status >= 0)
     {
-        syslog_time_ms    = time_ms;
-        syslog_sink_write = sink_write;
+        syslog_time_ms = time_ms;
+        syslog_output  = output;
     }
 
     for (; module < SYSLOG_CONFIG_MODULE_STOP; module++)
