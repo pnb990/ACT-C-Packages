@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pierre-noel.bouteville@allcircuits.com>
+#
+# SPDX-License-Identifier: LicenseRef-ALLCircuits-ACT-1.1
+
+# The configuration of the enclosing repository, minus four checks that cannot hold for these
+# libraries. Each line below says why that particular check is off.
+
+InheritParentConfig: true
+
+# This is C, so the C file extensions are the ones that matter.
+HeaderFileExtensions: ["h"]
+ImplementationFileExtensions: ["c"]
+
+Checks: >
+    -readability-identifier-naming,
+    -readability-magic-numbers,
+    -llvm-include-order,
+    -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+
+# readability-identifier-naming
+#     The root configuration spells out the C++ naming of this repository - CamelCase types,
+#     m_ prefixed members. These libraries are C and use snake_case with a module prefix, so
+#     the check reports every symbol and would report the right ones as wrong.
+#
+# readability-magic-numbers
+#     A C library's numbers are bases, widths and digit counts whose meaning is the expression
+#     they sit in. Naming each one produces a second vocabulary to keep in step with the first.
+#
+# llvm-include-order
+#     A C file lists its own header first, then one block per origin from the widest to the
+#     most specific: standard library, vendor, other modules, private headers. The check encodes
+#     the LLVM order instead - quoted headers before system ones - so it reports every file that
+#     follows the convention.
+#
+# clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+#     Reports every memcpy, memset and strlen, and asks for the _s variants of C11 Annex K
+#     instead. Annex K is optional, and neither glibc nor newlib implements it, so there is
+#     nothing to move to: the check cannot be satisfied with either. What it is really
+#     after - a copy whose length is not the size of its destination - is reported by
+#     bugprone-not-null-terminated-result and by the compiler's own -Wstringop-overflow, both
+#     of which stay on.
