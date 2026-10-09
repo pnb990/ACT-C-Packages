@@ -5,14 +5,14 @@
 ---
 
 # Thin caller of soft-lib/ci's fw-build.yaml: builds every library with the
-# host compiler and with the ARM one, warnings as errors.
+# host compiler and with the ARM one, warnings as errors, through the presets
+# of CMakePresets.json.
 
 "on": [push, pull_request]
 
 jobs:
   build-libs:
-    # The libraries target firmware, but the host gcc warns about things the
-    # cross one does not, and the reverse.
+    # One configure preset per compiler, named after it.
     strategy:
       fail-fast: false
       matrix:
@@ -34,23 +34,8 @@ jobs:
       # No python environment here.
       uv-sync: false
 
-      # A library is added by a project with add_subdirectory(), and has no
-      # top-level CMakeLists.txt of its own; this stands in for that project.
-      # -Werror, because a project that turns warnings into errors does so
-      # for the libraries too. A new library is one more name in the list.
+      # The top-level CMakeLists.txt and its presets: the same two commands a
+      # developer runs.
       build: |
-        mkdir -p build/top
-        cat > build/top/CMakeLists.txt <<'CML'
-        cmake_minimum_required(VERSION 3.20)
-        project(act_c_packages C)
-        set(CMAKE_C_STANDARD 11)
-        set(CMAKE_C_STANDARD_REQUIRED ON)
-        add_compile_options(-Wall -Wextra -Werror)
-        foreach(lib IN ITEMS format syslog)
-            add_subdirectory(${SRC}/${lib} ${lib})
-        endforeach()
-        CML
-        cmake -S build/top -B build/${{ matrix.cc }} -G Ninja -DSRC="$PWD" \
-              -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-              -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
-        cmake --build build/${{ matrix.cc }}
+        cmake --preset ${{ matrix.cc }}
+        cmake --build --preset ${{ matrix.cc }}

@@ -30,26 +30,13 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v6
 
-      # Same build as build-libs.yaml, both compilers in one job: a single
+      # Same build as build-libs.yaml, both presets in one job: a single
       # result answers a single question, "can the pin be bumped".
       - name: Build
         run: |
-          mkdir -p build/top
-          cat > build/top/CMakeLists.txt <<'CML'
-          cmake_minimum_required(VERSION 3.20)
-          project(act_c_packages C)
-          set(CMAKE_C_STANDARD 11)
-          set(CMAKE_C_STANDARD_REQUIRED ON)
-          add_compile_options(-Wall -Wextra -Werror)
-          foreach(lib IN ITEMS format syslog)
-              add_subdirectory(${SRC}/${lib} ${lib})
-          endforeach()
-          CML
-          for cc in gcc arm-none-eabi-gcc; do
-              cmake -S build/top -B build/$cc -G Ninja -DSRC="$PWD" \
-                    -DCMAKE_C_COMPILER=$cc \
-                    -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
-              cmake --build build/$cc
+          for preset in gcc arm-none-eabi-gcc; do
+              cmake --preset "$preset"
+              cmake --build --preset "$preset"
           done
 
   check-python-image:

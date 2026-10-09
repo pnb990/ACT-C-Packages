@@ -1,0 +1,45 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "Common to every compiler. Each leaf preset below builds into build/<preset>, so the two compilers never share a cmake cache.",
+      "generator": "Ninja"
+    },
+    {
+      "name": "gcc",
+      "inherits": "base",
+      "description": "The host compiler: it warns about things the cross one does not.",
+      "binaryDir": "${sourceDir}/build/gcc",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc"
+      }
+    },
+    {
+      "name": "arm-none-eabi-gcc",
+      "inherits": "base",
+      "description": "The firmware compiler. There is no C library to link a test program against, so cmake's compiler check builds a static library instead.",
+      "binaryDir": "${sourceDir}/build/arm-none-eabi-gcc",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "arm-none-eabi-gcc",
+        "CMAKE_TRY_COMPILE_TARGET_TYPE": "STATIC_LIBRARY"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "gcc",
+      "configurePreset": "gcc"
+    },
+    {
+      "name": "arm-none-eabi-gcc",
+      "configurePreset": "arm-none-eabi-gcc"
+    }
+  ]
+}
