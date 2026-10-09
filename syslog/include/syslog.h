@@ -194,13 +194,25 @@ typedef struct
  * already decided - and it never buffers the body, so nothing bounds a line.
  *
  * @param module The descriptor whose name prefixes the line.
+ * @param file   With SYSLOG_CONFIG_SOURCE_LOCATION, the calling source file,
+ *               NULL for none.
+ * @param line   With SYSLOG_CONFIG_SOURCE_LOCATION, the calling line.
  * @param level  The line's level, for the prefix tag.
  * @param format A printf format, followed by its arguments.
  */
+#if SYSLOG_CONFIG_SOURCE_LOCATION
+void syslog_emit(const syslog_module_t *module,
+                 const char *file,
+                 uint32_t line,
+                 syslog_level_t level,
+                 const char *format,
+                 ...) SYSLOG_CHECKED(/*format=*/5, /*first_arg=*/6);
+#else
 void syslog_emit(const syslog_module_t *module,
                  syslog_level_t level,
                  const char *format,
                  ...) SYSLOG_CHECKED(/*format=*/3, /*first_arg=*/4);
+#endif
 
 /*
  * The log call. The first two tests are compile-time constants on a constant
@@ -210,6 +222,18 @@ void syslog_emit(const syslog_module_t *module,
  * the per-module mask, changeable at run time. None is reachable through the
  * POSIX syslog() function, which is why these exist.
  */
+#if SYSLOG_CONFIG_SOURCE_LOCATION
+#    define SYSLOG_EMIT_CALL(severity, ...)                                    \
+        syslog_emit(&syslog_current_module,                                    \
+                    SYSLOG_CONFIG_SOURCE_FILE,                                 \
+                    (uint32_t)__LINE__,                                        \
+                    (severity),                                                \
+                    __VA_ARGS__)
+#else
+#    define SYSLOG_EMIT_CALL(severity, ...)                                    \
+        syslog_emit(&syslog_current_module, (severity), __VA_ARGS__)
+#endif
+
 #define SYSLOG(severity, ...)                                                  \
     do                                                                         \
     {                                                                          \
@@ -217,7 +241,7 @@ void syslog_emit(const syslog_module_t *module,
             (LOG_MASK(severity) & syslog_current_compile_mask) &&              \
             (LOG_MASK(severity) & *syslog_current_module.mask))                \
         {                                                                      \
-            syslog_emit(&syslog_current_module, (severity), __VA_ARGS__);      \
+            SYSLOG_EMIT_CALL((severity), __VA_ARGS__);                         \
         }                                                                      \
     } while (0)
 
@@ -258,6 +282,43 @@ void syslog_debug(const char *format, ...)
  */
 typedef uint32_t (*syslog_time_ms_t)(void);
 
+#if SYSLOG_CONFIG_LINE_BUFFER
+/**
+ * One log line, whole, as the line output hands it over: its fields apart, for
+ * a destination that carries them as such rather than as text - a frame, a
+ * record - and adds the presentation itself.
+ */
+typedef struct
+{
+    uint32_t time_ms;     /**< The time base's stamp when the line was made. */
+    syslog_level_t level; /**< The line's level. */
+    const char *module;   /**< The module's name, "" for a line with none. */
+    const char *file;     /**< The calling source file, NULL for a line with
+                               none or without SYSLOG_CONFIG_SOURCE_LOCATION. */
+    uint32_t line;        /**< The calling line, 0 when file is NULL. */
+    const char *text;     /**< The formatted body, null terminated, no EOL. */
+    size_t length;        /**< strlen(text), at most SYSLOG_CONFIG_LINE_BUFFER
+                               - 1: a longer body is truncated. */
+} syslog_line_t;
+
+/**
+ * Where each log line goes, with SYSLOG_CONFIG_LINE_BUFFER. The line, its text
+ * included, does not outlive the call. A call must return whatever becomes of
+ * the line, since a log call must never wedge its caller.
+ */
+typedef void (*syslog_line_write_t)(const syslog_line_t *line);
+
+/**
+ * @brief Take the time base and the line output, and set every registered
+ * module to its default mask.
+ *
+ * As the stream form below, with a line output in place of the sink.
+ *
+ * @param time_ms    The time base of the line's stamp.
+ * @param line_write The destination of every line.
+ */
+void syslog_init(syslog_time_ms_t time_ms, syslog_line_write_t line_write);
+#else
 /**
  * Where each run of a log line goes, prefix, body and the closing newline
  * alike. It has the shape of a format write callback, so the emitter streams
@@ -283,5 +344,6 @@ typedef void (*syslog_sink_write_t)(const char *data,
  * @param sink_write The destination of every line.
  */
 void syslog_init(syslog_time_ms_t time_ms, syslog_sink_write_t sink_write);
+#endif /* SYSLOG_CONFIG_LINE_BUFFER */
 
 #endif /* SYSLOG_H */

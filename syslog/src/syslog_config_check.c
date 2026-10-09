@@ -21,24 +21,39 @@
 #    error "the syslog configuration must define SYSLOG_CONFIG_COMPILE_MASK"
 #endif
 
-#if !defined(SYSLOG_CONFIG_COLOR)
-#    error "the syslog configuration must define SYSLOG_CONFIG_COLOR"
+#if !defined(SYSLOG_CONFIG_LINE_BUFFER)
+#    error "the syslog configuration must define SYSLOG_CONFIG_LINE_BUFFER"
 #endif
 
-#if SYSLOG_CONFIG_COLOR && !defined(SYSLOG_CONFIG_COLOR_RESET)
-#    error "the syslog configuration must define SYSLOG_CONFIG_COLOR_RESET"
+#if !defined(SYSLOG_CONFIG_SOURCE_LOCATION)
+#    error "the syslog configuration must define SYSLOG_CONFIG_SOURCE_LOCATION"
 #endif
 
-#if !defined(SYSLOG_CONFIG_SHOW_TIME)
-#    error "the syslog configuration must define SYSLOG_CONFIG_SHOW_TIME"
+#if SYSLOG_CONFIG_SOURCE_LOCATION && !defined(SYSLOG_CONFIG_SOURCE_FILE)
+#    error "the syslog configuration must define SYSLOG_CONFIG_SOURCE_FILE"
 #endif
 
-#if !defined(SYSLOG_CONFIG_SHOW_LEVEL)
-#    error "the syslog configuration must define SYSLOG_CONFIG_SHOW_LEVEL"
-#endif
+/* The prefix options shape the stream output only. */
+#if !SYSLOG_CONFIG_LINE_BUFFER
+#    if !defined(SYSLOG_CONFIG_COLOR)
+#        error "the syslog configuration must define SYSLOG_CONFIG_COLOR"
+#    endif
 
-#if !defined(SYSLOG_CONFIG_EOL)
-#    error "the syslog configuration must define SYSLOG_CONFIG_EOL"
+#    if SYSLOG_CONFIG_COLOR && !defined(SYSLOG_CONFIG_COLOR_RESET)
+#        error "the syslog configuration must define SYSLOG_CONFIG_COLOR_RESET"
+#    endif
+
+#    if !defined(SYSLOG_CONFIG_SHOW_TIME)
+#        error "the syslog configuration must define SYSLOG_CONFIG_SHOW_TIME"
+#    endif
+
+#    if !defined(SYSLOG_CONFIG_SHOW_LEVEL)
+#        error "the syslog configuration must define SYSLOG_CONFIG_SHOW_LEVEL"
+#    endif
+
+#    if !defined(SYSLOG_CONFIG_EOL)
+#        error "the syslog configuration must define SYSLOG_CONFIG_EOL"
+#    endif
 #endif
 
 #if !defined(SYSLOG_CONFIG_IMPLICIT_LEVEL_API)

@@ -60,6 +60,9 @@ copy that leaves an option out is rejected at compile time.
 | Option                       | Sets                                                                   |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `SYSLOG_CONFIG_COMPILE_MASK` | the levels any module may emit: a constant mask, or a program variable |
+| `SYSLOG_CONFIG_LINE_BUFFER`  | 0 to stream each line as text; a size in bytes to hand it whole, its fields apart (see below) |
+| `SYSLOG_CONFIG_SOURCE_LOCATION` | 1 to hand each `SYSLOG_*` call's source file and line to the output |
+| `SYSLOG_CONFIG_SOURCE_FILE`  | the file name a call hands over, `__FILE_NAME__` where the compiler has it, else `__FILE__` |
 | `SYSLOG_CONFIG_COLOR`        | 1 to colour each line by level with ANSI escapes, 0 for a plain stream |
 | `SYSLOG_CONFIG_COLOR_RESET`  | the escape that ends a coloured line, read only when the colour is on  |
 | `SYSLOG_CONFIG_SHOW_TIME`    | 1 to start the prefix with the millisecond stamp                       |
@@ -72,6 +75,15 @@ copy that leaves an option out is rejected at compile time.
 | `SYSLOG_CONFIG_MODULE_SECTION` | the section, a string literal, of the descriptors                   |
 | `SYSLOG_CONFIG_MODULE_START` | the symbol the linker defines at the start of the descriptors         |
 | `SYSLOG_CONFIG_MODULE_STOP`  | the symbol the linker defines at their end                             |
+
+The options from `SYSLOG_CONFIG_COLOR` to `SYSLOG_CONFIG_EOL` shape the
+stream output, and are neither read nor required with the line output.
+
+The source location is the `SYSLOG_*` macros' alone: `syslog()`, `vsyslog()`
+and the no-module level functions carry none. With the stream output it shows
+in the prefix after the level tag, `foo.c:42 `; with the line output it fills
+the line's `file` and `line`. At 0 the macros pass neither, `file` is `NULL`
+and nothing reaches the call sites.
 
 The compile mask is a level mask, as a module's own and `setlogmask()` take,
 or the name of a `const int` the program defines. A constant strips the calls
@@ -92,8 +104,24 @@ declared or called.
   library hands back around every line, and leaves the output off if that
   fails;
 - a call to `syslog_init()` before the first log, handing it the millisecond
-  time base of the prefix and the sink each run of a line goes to: until then
-  every module's running mask is zero, there is no sink, and nothing comes out.
+  time base of the prefix and the output: until then every module's running
+  mask is zero, there is no output, and nothing comes out.
+
+## Two outputs
+
+With `SYSLOG_CONFIG_LINE_BUFFER` at 0, the output is a sink, which takes
+each line as runs of text, the prefix the options shape and the end of line
+included, with no buffer: nothing bounds a line. It suits a terminal or a
+file.
+
+With a size, the output is a line output, `syslog_line_write_t`: the body is
+formatted into a buffer of that size, truncated to it, and the line is handed
+over whole, as a `syslog_line_t` holding its stamp, level, module, source
+location and text apart, without a prefix or an end of line. It suits a
+destination that carries them as fields - a frame on a link, a record in a
+store - and leaves the presentation to whoever reads them, rather than parsing
+them back out of the text. The buffer is static, one per program, and the lock serialises the
+writers over it.
 
 The modules are gathered by the linker, with no central list. Each registration
 puts its descriptor in `SYSLOG_CONFIG_MODULE_SECTION` and its running mask in
