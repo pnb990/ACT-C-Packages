@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pierre-noel.bouteville@allcircuits.com>
+#
+# SPDX-License-Identifier: LicenseRef-ALLCircuits-ACT-1.1
+
+---
+
+# Thin caller of soft-lib/ci's fw-build.yaml: builds every library with the
+# host compiler and with the ARM one, warnings as errors.
+
+"on": [push, pull_request]
+
+jobs:
+  build-libs:
+    # The libraries target firmware, but the host gcc warns about things the
+    # cross one does not, and the reverse.
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, arm-none-eabi-gcc]
+
+    # Pinned to a commit, like the image below: a change in soft-lib/ci breaks
+    # nothing here until this line is bumped. This sha brings the `uv-sync`
+    # input (soft-lib/ci#14).
+    uses: soft-lib/ci/.forgejo/workflows/fw-build.yaml@8898a65cec715a915b26f44540d243439f36e7c9
+    with:
+      # Host gcc, cmake, ninja and the ARM toolchain. Pinned to a commit tag,
+      # not to `ci-latest`; check-image-bump.yaml says when the bump is safe.
+      image: pnb990/fw-arm-none-eabi-13.2.rel1:ci-20260824-f0906ec6f4f6c7af652b6012e93af76b0c1eea6e
+
+      matrix-value: ${{ matrix.cc }}
+      require-matrix: true
+      submodules: "false"
+
+      # No python environment here.
+      uv-sync: false
+
+      # A library is added by a project with add_subdirectory(), and has no
+      # top-level CMakeLists.txt of its own; this stands in for that project.
+      # -Werror, because a project that turns warnings into errors does so
+      # for the libraries too. A new library is one more name in the list.
+      build: |
+        mkdir -p build/top
+        cat > build/top/CMakeLists.txt <<'CML'
+        cmake_minimum_required(VERSION 3.20)
+        project(act_c_packages C)
+        set(CMAKE_C_STANDARD 11)
+        set(CMAKE_C_STANDARD_REQUIRED ON)
+        add_compile_options(-Wall -Wextra -Werror)
+        foreach(lib IN ITEMS format syslog)
+            add_subdirectory(${SRC}/${lib} ${lib})
+        endforeach()
+        CML
+        cmake -S build/top -B build/${{ matrix.cc }} -G Ninja -DSRC="$PWD" \
+              -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+              -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
+        cmake --build build/${{ matrix.cc }}
