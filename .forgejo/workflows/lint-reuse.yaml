@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pnb990@gmail.com>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+---
+
+# Thin caller: the steps live once in soft-lib/ci, this file holds what is
+# specific to this project -- the trigger and the image pin.
+
+"on":
+  push:
+
+jobs:
+  lint-reuse:
+    # Pinned to a commit, like the image below: a change in soft-lib/ci breaks
+    # nothing here until this line is bumped. Same sha as build-libs.yaml, so
+    # there is one soft-lib/ci pin to bump.
+    uses: soft-lib/ci/.forgejo/workflows/lint-reuse.yaml@8898a65cec715a915b26f44540d243439f36e7c9
+    with:
+      # Pinned to a commit tag, not to `ci-latest`; check-image-bump.yaml is
+      # what says when the bump is safe.
+      image: pnb990/python3:ci-20260824-f0906ec6f4f6c7af652b6012e93af76b0c1eea6e
+
+      # A repository of C libraries: no pyproject.toml, no uv.lock, so reuse
+      # comes from `uvx`. A new reuse release can turn this red on a commit
+      # that changed nothing; carrying a python environment for one tool is
+      # the alternative, and the worse one.
+      pinned: false
+
+      submodules: "false"

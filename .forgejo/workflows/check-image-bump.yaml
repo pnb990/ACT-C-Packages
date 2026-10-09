@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pnb990@gmail.com>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+---
+
+# The canary for the pinned images: the same checks as build-libs.yaml and
+# lint-reuse.yaml, on the floating `-latest` tags, weekly. Green, the pins
+# can be bumped to the commit the provenance step prints; red, the image moved
+# under us and nothing pinned is affected yet.
+
+"on":
+  # Forgejo only runs a schedule on the default branch.
+  schedule:
+    # Monday, 03:00 UTC.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  check-firmware-image:
+    runs-on: debian
+    container:
+      image: pnb990/fw-arm-none-eabi-13.2.rel1:ci-latest
+    steps:
+      # Copy the commit from this log into the `image:` input of
+      # build-libs.yaml to bump its pin.
+      - name: Image provenance
+        run: cat /etc/image-info
+
+      - name: Checkout the repo
+        uses: actions/checkout@v6
+
+      # Same build as build-libs.yaml, both presets in one job: a single
+      # result answers a single question, "can the pin be bumped".
+      - name: Build
+        run: |
+          for preset in gcc arm-none-eabi-gcc; do
+              cmake --preset "$preset"
+              cmake --build --preset "$preset"
+          done
+
+  check-python-image:
+    runs-on: debian
+    container:
+      image: pnb990/python3:ci-latest
+    steps:
+      # Copy the commit from this log into the `image:` input of
+      # lint-reuse.yaml to bump its pin.
+      - name: Image provenance
+        run: cat /etc/image-info
+
+      - name: Checkout the repo
+        uses: actions/checkout@v6
+
+      - name: Check REUSE compliance
+        run: uvx reuse lint

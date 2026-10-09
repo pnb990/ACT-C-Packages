@@ -1,5 +1,6 @@
 <!--
 SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pierre-noel.bouteville@allcircuits.com>
+SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pnb990@gmail.com>
 
 SPDX-License-Identifier: LicenseRef-ALLCircuits-ACT-1.1
 -->
@@ -63,3 +64,14 @@ by patching the library.
 
 The documentation a project generates covers its own tree only. A library here
 documents itself in its README and in the comments of its sources.
+
+## Building alone
+
+The top-level `CMakeLists.txt` builds every library alone, with its default
+configuration and warnings as errors; a project never goes through it. One
+preset per compiler, the same commands as the CI:
+
+```sh
+cmake --preset gcc                  # or arm-none-eabi-gcc
+cmake --build --preset gcc
+```

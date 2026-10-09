@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pnb990@gmail.com>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+---
+
+# Thin caller of soft-lib/ci's fw-build.yaml: builds every library with the
+# host compiler and with the ARM one, warnings as errors, through the presets
+# of CMakePresets.json.
+
+"on": [push, pull_request]
+
+jobs:
+  build-libs:
+    # One configure preset per compiler, named after it.
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, arm-none-eabi-gcc]
+
+    # Pinned to a commit, like the image below: a change in soft-lib/ci breaks
+    # nothing here until this line is bumped. This sha brings the `uv-sync`
+    # input (soft-lib/ci#14).
+    uses: soft-lib/ci/.forgejo/workflows/fw-build.yaml@8898a65cec715a915b26f44540d243439f36e7c9
+    with:
+      # Host gcc, cmake, ninja and the ARM toolchain. Pinned to a commit tag,
+      # not to `ci-latest`; check-image-bump.yaml says when the bump is safe.
+      image: pnb990/fw-arm-none-eabi-13.2.rel1:ci-20260824-f0906ec6f4f6c7af652b6012e93af76b0c1eea6e
+
+      matrix-value: ${{ matrix.cc }}
+      require-matrix: true
+      submodules: "false"
+
+      # No python environment here.
+      uv-sync: false
+
+      # The top-level CMakeLists.txt and its presets: the same two commands a
+      # developer runs.
+      build: |
+        cmake --preset ${{ matrix.cc }}
+        cmake --build --preset ${{ matrix.cc }}
