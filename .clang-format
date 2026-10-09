@@ -1,0 +1,124 @@
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pierre-noel.bouteville@allcircuits.com>
+#
+# SPDX-License-Identifier: LicenseRef-ALLCircuits-ACT-1.1
+
+# See https://clang.llvm.org/docs/ClangFormatStyleOptions.html
+#
+# Needs clang-format 21, and says so in a way that cannot be missed:
+# 'BinPackParameters: OnePerLine' and 'ReflowComments: Always' are spellings
+# only 21 accepts, so an older binary refuses the file and formats nothing.
+# That refusal is the point. Both options have an older spelling of the same
+# meaning, but taking it would let version 19 read the file and then produce a
+# different result on many files - it indents neither the include guard nor
+# the body of a function-like macro the way 21 does. A loud refusal costs one
+# puzzled minute; a silent divergence costs a spurious diff on every review.
+#
+# The ACT C style, plus the deviations below. Every one of them was found by
+# running the formatter over ACT C sources, not chosen a priori:
+#
+#   AllowShortBlocksOnASingleLine: Empty
+#       An empty body is the one block worth keeping on a single line: a
+#       deliberate 'for (;;) {}' reads as 'nothing left to do', where the same
+#       thing spread over three lines reads as an unfinished edit. Anything
+#       with a statement in it still breaks out.
+#
+#   BraceWrapping: AfterCaseLabel, SplitEmptyFunction
+#       A case label that opens a scope only does so to declare something, and
+#       the brace belongs on the label rather than a line of its own; an empty
+#       function body, like an empty block above, says more collapsed than
+#       spread out. Everything else follows the shared style.
+#
+#   CommentPragmas
+#       Reflowing splits a copyright tag that does not fit the column limit
+#       across two lines, and the REUSE parser reads only the first: the
+#       address ends up on a continuation line that carries no tag and is
+#       dropped from the SBOM, while 'reuse lint' still passes, so nothing
+#       catches it. The pattern keeps the tool's own default alongside.
+#
+#   Cpp11BracedListStyle: false
+#       Microsoft style breaks a nested designated initialiser onto its own
+#       line after the '=', which turns a table of aggregates into one field
+#       per two lines and an ever growing indent. This is not cosmetic: such a
+#       table is often what a generator has to emit and a reviewer has to
+#       read.
+#
+#   QualifierAlignment: Leave
+#       'Left' moves a const in front of the macro that introduces the
+#       declaration, so an inline accessor returning a pointer to const comes
+#       back as 'const ALWAYS_INLINE uart_t *' - a const sitting in front of
+#       the attribute rather than the type. The option is documented as
+#       unreliable without full semantic information, and a macro carrying
+#       declaration specifiers is exactly what it cannot resolve.
+#
+#   ReflowComments: Always
+#       Frozen comments at this column limit leave prose wider than the code
+#       around it, and nothing reports it. Rewrapping keeps the two in step,
+#       and CommentPragmas covers the one construct that must not move.
+
+---
+Language: Cpp
+BasedOnStyle: Microsoft
+
+AccessModifierOffset: 0
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+AllowAllArgumentsOnNextLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: false
+BinPackParameters: OnePerLine
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeElse: true
+  SplitEmptyFunction: false
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Custom
+BreakStringLiterals: true
+ColumnLimit: 80
+CommentPragmas: "^ ?(SPDX-|IWYU pragma:)"
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: false
+DerivePointerAlignment: false
+IncludeBlocks: Preserve
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+IndentWidth: 4
+KeepEmptyLinesAtTheStartOfBlocks: false
+LineEnding: LF
+MaxEmptyLinesToKeep: 1
+PointerAlignment: Right
+QualifierAlignment: Leave
+ReferenceAlignment: Right
+ReflowComments: Always
+SortIncludes: true
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: false
+SpacesInContainerLiterals: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+Standard: Auto
+...
