@@ -82,6 +82,8 @@ static const char *const syslog_level_color[] = {
  * masked as in the stream output below.
  */
 static void syslog_emit_line(const char *name,
+                             const char *file,
+                             uint32_t line_number,
                              syslog_level_t level,
                              const char *format,
                              va_list args)
@@ -95,6 +97,8 @@ static void syslog_emit_line(const char *name,
     line.time_ms = syslog_time_ms();
     line.level   = (syslog_level_t)((unsigned int)level & 0x07u);
     line.module  = name;
+    line.file    = file;
+    line.line    = line_number;
     line.text    = syslog_line_buffer;
     line.length  = ((size_t)length < sizeof(syslog_line_buffer))
                        ? (size_t)length
@@ -109,6 +113,8 @@ static void syslog_emit_line(const char *name,
  * facility in its high bits still lands on a tag rather than off the end.
  */
 static void syslog_emit_stream(const char *name,
+                               const char *file,
+                               uint32_t line_number,
                                syslog_level_t level,
                                const char *format,
                                va_list args)
@@ -128,6 +134,15 @@ static void syslog_emit_stream(const char *name,
 #    if SYSLOG_CONFIG_SHOW_LEVEL
     format_emit(syslog_output, NULL, "%s ", syslog_level_tag[level_index]);
 #    endif
+#    if SYSLOG_CONFIG_SOURCE_LOCATION
+    if (file != NULL)
+    {
+        format_emit(syslog_output, NULL, "%s:%" PRIu32 " ", file, line_number);
+    }
+#    else
+    (void)file;
+    (void)line_number;
+#    endif
     format_emit(syslog_output, NULL, "%s: ", name);
     format_vemit(syslog_output, NULL, format, args);
 #    if SYSLOG_CONFIG_COLOR
@@ -146,6 +161,8 @@ static void syslog_emit_stream(const char *name,
  * writer does not interleave characters into it, nor into the line buffer.
  */
 static void syslog_emit_v(const char *name,
+                          const char *file,
+                          uint32_t line_number,
                           syslog_level_t level,
                           const char *format,
                           va_list args)
@@ -156,9 +173,9 @@ static void syslog_emit_v(const char *name,
         syslog_lock(syslog_lock_handle);
 #endif
 #if SYSLOG_CONFIG_LINE_BUFFER
-        syslog_emit_line(name, level, format, args);
+        syslog_emit_line(name, file, line_number, level, format, args);
 #else
-        syslog_emit_stream(name, level, format, args);
+        syslog_emit_stream(name, file, line_number, level, format, args);
 #endif
 #if SYSLOG_CONFIG_LOCK
         syslog_unlock(syslog_lock_handle);
@@ -166,6 +183,21 @@ static void syslog_emit_v(const char *name,
     }
 }
 
+#if SYSLOG_CONFIG_SOURCE_LOCATION
+void syslog_emit(const syslog_module_t *module,
+                 const char *file,
+                 uint32_t line,
+                 syslog_level_t level,
+                 const char *format,
+                 ...)
+{
+    va_list args;
+
+    va_start(args, format);
+    syslog_emit_v(module->name, file, line, level, format, args);
+    va_end(args);
+}
+#else
 void syslog_emit(const syslog_module_t *module,
                  syslog_level_t level,
                  const char *format,
@@ -174,13 +206,19 @@ void syslog_emit(const syslog_module_t *module,
     va_list args;
 
     va_start(args, format);
-    syslog_emit_v(module->name, level, format, args);
+    syslog_emit_v(module->name, NULL, 0u, level, format, args);
     va_end(args);
 }
+#endif
 
 void vsyslog(int priority, const char *format, va_list args)
 {
-    syslog_emit_v("", (syslog_level_t)(priority & 0x07), format, args);
+    syslog_emit_v("",
+                  NULL,
+                  0u,
+                  (syslog_level_t)(priority & 0x07),
+                  format,
+                  args);
 }
 
 void syslog(int priority, const char *format, ...)
@@ -203,7 +241,7 @@ void syslog(int priority, const char *format, ...)
         {                                                                      \
             va_list args;                                                      \
             va_start(args, format);                                            \
-            syslog_emit_v("", (level), format, args);                          \
+            syslog_emit_v("", NULL, 0u, (level), format, args);                \
             va_end(args);                                                      \
         }
 

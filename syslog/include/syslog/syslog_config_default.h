@@ -51,6 +51,25 @@
 #define SYSLOG_CONFIG_LINE_BUFFER 0
 
 /**
+ * Hand each SYSLOG_* call's source file and line to the output: in the stream
+ * prefix (`foo.c:42 `), in syslog_line_t's file and line. 1 to pass them, 0 to
+ * leave them out of every call site, which then saves the two arguments and
+ * the file name strings.
+ */
+#define SYSLOG_CONFIG_SOURCE_LOCATION 1
+
+/**
+ * The file name a call site hands over with SYSLOG_CONFIG_SOURCE_LOCATION.
+ * __FILE_NAME__, the base name, where the compiler has it (GCC 12, Clang 9);
+ * __FILE__, the path as the build spells it, elsewhere.
+ */
+#if defined(__FILE_NAME__)
+#    define SYSLOG_CONFIG_SOURCE_FILE __FILE_NAME__
+#else
+#    define SYSLOG_CONFIG_SOURCE_FILE __FILE__
+#endif
+
+/**
  * Colour the line by level: a per-level ANSI sequence before the prefix and a
  * reset after the body. 1 to colour, 0 to leave the stream plain. A trace read
  * by a terminal that understands the escapes wants it on; one captured to a

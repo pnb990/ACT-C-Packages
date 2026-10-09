@@ -25,6 +25,14 @@
 #    error "the syslog configuration must define SYSLOG_CONFIG_LINE_BUFFER"
 #endif
 
+#if !defined(SYSLOG_CONFIG_SOURCE_LOCATION)
+#    error "the syslog configuration must define SYSLOG_CONFIG_SOURCE_LOCATION"
+#endif
+
+#if SYSLOG_CONFIG_SOURCE_LOCATION && !defined(SYSLOG_CONFIG_SOURCE_FILE)
+#    error "the syslog configuration must define SYSLOG_CONFIG_SOURCE_FILE"
+#endif
+
 /* The prefix options shape the stream output only. */
 #if !SYSLOG_CONFIG_LINE_BUFFER
 #    if !defined(SYSLOG_CONFIG_COLOR)
