@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pierre-noel.bouteville@allcircuits.com>
+# SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pnb990@gmail.com>
 #
-# SPDX-License-Identifier: LicenseRef-ALLCircuits-ACT-1.1
+# SPDX-License-Identifier: BSD-3-Clause
 
 # Every library of this repository built alone, with its default configuration: what the CI checks
 # and what a developer runs to do the same (CMakePresets.json). A project never comes through here:

@@ -1,5 +1,6 @@
 <!--
 SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pierre-noel.bouteville@allcircuits.com>
+SPDX-FileCopyrightText: 2026 Pierre-Noel Bouteville <pnb990@gmail.com>
 
 SPDX-License-Identifier: LicenseRef-ALLCircuits-ACT-1.1
 -->
